@@ -27,53 +27,83 @@ class DeviceController {
         next(ApiError.badRequest(e.message));
     }
   }
+    async update(req, res, next) {
+        try {
+            let { messages, id, channels} = req.body;
+            let formInfo = await FormInfo.findOne(
+                {
+                    where: {id}
+                }
+            )
+            await ChannelInfo.destroy(
+                {
+                    where: {formInfoId: id}
+                }
+            )
 
+            messages.forEach(i =>
+                ChannelInfo.create({
+                    name: i.name,
+                    text: i.text,
+                    keyboard_type: i.keyBoardType,
+                    buttons: i.buttonsArray,
+                    buttons_type: i.buttonsType,
+                    formInfoId: id
+                })
+            )
+
+
+            // await jane.update({ name: "Ada" })
+            // await jane.save()
+            return res.json(formInfo);
+        } catch (e) {
+            next(ApiError.badRequest(e.message));
+        }
+    }
   async getAll(req, res) {
-    let forms = await Forms.findAll();
-    return res.json(forms)
-    // let { brandId, typeId, limit, page } = req.query;
-    // page = page || 1;
-    // limit = limit || 9;
-    // let offset = page * limit - limit;
-    // let devices;
-    // if (!brandId && !typeId) {
-    //
-    // }
-    // if (brandId && !typeId) {
-    //   devices = await Device.findAndCountAll({
-    //     where: { brandId },
-    //     limit,
-    //     offset,
-    //   });
-    // }
-    // if (!brandId && typeId) {
-    //   devices = await Device.findAndCountAll({
-    //     where: { typeId },
-    //     limit,
-    //     offset,
-    //   });
-    // }
-    // if (brandId && typeId) {
-    //   devices = await Device.findAndCountAll({
-    //     where: { brandId, typeId },
-    //     limit,
-    //     offset,
-    //   });
-    // }
-    // return res.json(devices);
+    const forms = await Forms.findAll();
+    const channels = await Channel.findAll();
+    let view = {'forms': forms, 'channels': channels}
+    return res.json(view)
   }
   async getOne(req, res) {
       const {id} = req.params;
       let view = {};
-      const form = await FormInfo.findOne(
+      const formInfo = await FormInfo.findOne(
           {
               where: {id},
               include: [{model: ChannelInfo, as: 'channel_infos'}]
           }
       )
+      const form = await Forms.findOne(
+          {
+              where: {id}
+
+          }
+      )
+      let messageArr = []
+      formInfo.channel_infos.forEach(message => {
+          let newForm = {};
+          newForm['id'] = message.id;
+          newForm['buttonsArray'] = [];
+          message.buttons.split(',').forEach(button => {
+              if (button.length > 0)
+               newForm['buttonsArray'].push({'buttonStatus': true, 'text': button})
+          })
+
+          newForm['buttonsType'] = message.buttons_type;
+          newForm['keyBoardType'] = message.keyboard_type;
+          newForm['name'] = message.name;
+          newForm['text'] = message.text;
+          messageArr.push(newForm)
+      })
+
+
       const channels = await Channel.findAll();
       view['channel_data'] = channels;
-      view['formData'] = form
+      view['formData'] = messageArr;
+      view['selectedChannels'] = formInfo.channels.split(',');
+      view['name'] = form.name
 
       return res.json(view)
   }

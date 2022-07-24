@@ -1,6 +1,13 @@
 <template>
   <div class="main_form" v-show="visible">
      <div class="container">
+       <b-form-textarea
+           style="height: 38px"
+           id="textareaName"
+           v-model="formName"
+           rows="1"
+           :disabled="isEdit"
+       ></b-form-textarea>
     <Multiselect v-model="mainChannels"
                :options="options"
                :multiple="true"
@@ -91,7 +98,7 @@
            </b-modal>
       </div>
       <b-button @click="closeWindowWithSave">Сохранить</b-button>
-      <b-button @click="$parent.showForm = !$parent.showForm">Отмена</b-button>
+      <b-button @click="closeWindow">Отмена</b-button>
    </div>
 
 </template>
@@ -100,6 +107,7 @@
 
 import Multiselect from 'vue-multiselect'
 import axios from "axios";
+//import lodash from "lodash"
 //import axios from 'axios'
 export default {
   name: 'MessageForm',
@@ -112,16 +120,18 @@ export default {
   },
 data () {
    return {
-     buttonType: 'Быстрый ответ',
+   formName: '',
+     diff: [],
+     isEdit: '',
+   buttonType: 'Быстрый ответ',
    mainChannels: [],
    selectedChannel: [],
    selectedChannels: [],
+     oldChannelsForms: [],
    options: [
-      { name: 'Vk', key: 1},
-      { name: 'SMS', key: 2},
-      { name: 'Telegram', key: 3},
-      { name: 'Whats App', key: 4}
+
    ],
+     oldMainChannels: [],
    checked: true,
    statusModel: 'Keyboard',
    buttonStatus: true,
@@ -131,7 +141,9 @@ data () {
    messageText: '',
    channelsForms: [],
    messageIndex: null,
-   edit: false
+   edit: false,
+     id: null,
+     newMessages: [],
    }
    },
    watch: {
@@ -159,14 +171,27 @@ data () {
   },
   methods: {
     renderForm(index){
+      const vm = this;
       if (index == null) return
+      this.id = index;
+      vm.$wait.start('render');
       axios({
         method: "get",
         url: `http://localhost:5050/api/device/${index}`,
       }).then((resp) => {
         if (resp.status == 200) {
-          console.log(resp)
-
+          //let info = null;
+          this.channelsForms = resp.data.formData;
+          this.oldChannelsForms = JSON.parse(JSON.stringify(this.channelsForms));
+          this.options = resp.data.channel_data;
+          resp.data.selectedChannels.forEach(channel => {
+            this.mainChannels.push(resp.data.channel_data.find(x => x.id == channel))
+          })
+          this.formName = resp.data.name
+          this.oldMainChannels = JSON.parse(JSON.stringify(this.mainChannels));
+          this.$parent.showForm = !this.$parent.showForm;
+          console.log(this.mainChannels)
+          vm.$wait.end('render');
         }
       })
     },
@@ -184,6 +209,7 @@ data () {
          this.channelsForms[this.messageIndex] = {'name': this.selectedChannel.name, 'text': this.messageText, 'buttonsArray': this.buttonsArray, 'keyBoardType': this.statusModel, buttonsType: this.buttonType};
        }else{
          this.channelsForms.push( {'name': this.selectedChannel.name, 'text': this.messageText, 'buttonsArray': this.buttonsArray, 'keyBoardType': this.statusModel, buttonsType: this.buttonType});
+          this.newMessages.push({'name': this.selectedChannel.name, 'text': this.messageText, 'buttonsArray': this.buttonsArray, 'keyBoardType': this.statusModel, buttonsType: this.buttonType})
        }
          this.messageText = '';
          this.buttonsArray = [];
@@ -207,26 +233,68 @@ data () {
        this.$bvModal.show('bv-modal-button')
       },
       closeWindowWithSave(){
-      const vm = this;
-       let channelInfo = JSON.parse(JSON.stringify(this.channelsForms));
-       channelInfo.forEach(x =>{
+       const vm = this;
+       if (this.oldMainChannels.length !== this.mainChannels && this.oldMainChannels.length !== 0 && this.isEdit){
+         this.update();
+       }else{
+       let messagesInfo = JSON.parse(JSON.stringify(this.channelsForms));
+         messagesInfo.forEach(x =>{
          x.buttonsArray = x.buttonsArray.map(y => y.text).join(',')
        })
         axios({
           method: "post",
           url: "http://localhost:5050/api/device/",
           data: {
-            'name': 'TEst2',
-            'channels': this.mainChannels.map(x => x.key).join(','),
-            'info': channelInfo
+            'name': this.formName,
+            'channels': this.mainChannels.map(x => x.id).join(','),
+            'info': messagesInfo
           }
         }).then((resp) => {
           if (resp.status == 200) {
-            console.log(resp)
+            vm.mainChannels = [];
+            vm.channelsForms = [];
+            vm.oldChannelsForms = [];
+            vm.formName = '';
             vm.$parent.showForm = !vm.$parent.showForm;
+            vm.$parent.renderCatalog();
           }
-        })
-      }
+        })}
+
+      },
+    closeWindow(){
+      const vm = this;
+      vm.mainChannels = [];
+      vm.channelsForms = [];
+      vm.oldChannelsForms = [];
+      vm.formName = '';
+      vm.$parent.showForm = !vm.$parent.showForm;
+      vm.$parent.renderCatalog();
+    },
+    update(){
+      const vm = this;
+      let messagesInfo = JSON.parse(JSON.stringify(this.channelsForms));
+      messagesInfo.forEach(x =>{
+        x.buttonsArray = x.buttonsArray.map(y => y.text).join(',')
+      })
+      axios({
+        method: "post",
+        url: "http://localhost:5050/api/device/update",
+        data: {
+          'channels': this.mainChannels.map(x => x.id).join(','),
+          'messages': messagesInfo,
+          'id': this.id
+        }
+      }).then((resp) => {
+        if (resp.status == 200) {
+          vm.mainChannels = [];
+          vm.channelsForms = [];
+          vm.oldChannelsForms = [];
+          vm.formName = '';
+          vm.$parent.showForm = !vm.$parent.showForm;
+          vm.$parent.renderCatalog();
+        }
+      })
+    }
    }
 
 

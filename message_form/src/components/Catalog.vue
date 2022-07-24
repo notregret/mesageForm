@@ -5,8 +5,8 @@
         <h1>
             Реестр форм
         </h1>
-        <b-button pill class="button3" @click="showForm = !showForm"><b-icon-plus></b-icon-plus></b-button>
-        <b-button pill class="button3" @click="getData"><b-icon-pencil></b-icon-pencil></b-button>
+        <b-button pill class="button3" @click="showOnAdd"><b-icon-plus></b-icon-plus></b-button>
+        <b-button pill class="button3" @click="showOnEdit"><b-icon-pencil></b-icon-pencil></b-button>
         <b-table :items="items"
                 :fields="fields"
                 hover
@@ -50,21 +50,32 @@ export default {
       this.rowIndex = item.id
     },
      renderCatalog(){
+       this.items = [];
+       const vm = this;
+       vm.$wait.start('render');
        axios({
          method: "get",
          url: "http://localhost:5050/api/device/"
        }).then((resp) => {
          if (resp.status == 200) {
-           resp.data.forEach(x => {
+           resp.data.forms.forEach(x => {
              this.items.push(x)
            })
+           this.$refs["MessageForm"].options = resp.data.channels;
+           vm.$wait.end('render');
          }
        })
      },
-     getData(){
+     showOnEdit(){
        this.$refs["MessageForm"].renderForm(this.rowIndex);
-       this.showForm = !this.showForm;
-     }
+       this.$refs["MessageForm"].isEdit = true;
+
+     },
+    showOnAdd(){
+      this.showForm = !this.showForm;
+      this.$refs['MessageForm'].isEdit = false;
+
+    }
    }
 
 
